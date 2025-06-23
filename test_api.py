@@ -124,6 +124,40 @@ async def test_stats(session):
             return False
 
 
+async def test_ask_question(session, question):
+    """Test the ask endpoint with natural language questions."""
+    print(f"\n6. Testing question: '{question}'")
+    
+    payload = {
+        "query": question,
+        "top_k": 5,
+        "include_sources": True,
+        "temperature": 0.3
+    }
+    
+    async with session.post(f"{API_BASE_URL}/ask", json=payload) as resp:
+        if resp.status == 200:
+            result = await resp.json()
+            print(f"✓ Question answered successfully:")
+            print(f"  - Query type: {result['query_type']}")
+            print(f"  - Confidence: {result['confidence_score']:.2f}")
+            print(f"  - Processing time: {result['processing_time_ms']:.2f}ms")
+            print(f"    (Search: {result['search_time_ms']:.2f}ms, Generation: {result['generation_time_ms']:.2f}ms)")
+            print(f"\n  Answer: {result['answer']}")
+            
+            if result.get('sources'):
+                print(f"\n  Sources ({len(result['sources'])} found):")
+                for i, source in enumerate(result['sources'][:3]):
+                    print(f"    [{i+1}] Score: {source['relevance_score']:.3f}")
+                    print(f"        {source['content'][:100]}...")
+                    
+            return True
+        else:
+            error = await resp.text()
+            print(f"✗ Ask request failed: {resp.status} - {error}")
+            return False
+
+
 async def main():
     """Run all tests."""
     print("=" * 60)
@@ -176,6 +210,18 @@ async def main():
         
         # Get final stats
         await test_stats(session)
+        
+        # Test natural language questions
+        test_questions = [
+            "Who is Patrick Schönfeld?",
+            "What is the role of decidalo in the company?",
+            "Tell me about the workshop manual",
+            "What products are mentioned in the documents?"
+        ]
+        
+        for question in test_questions:
+            await test_ask_question(session, question)
+            await asyncio.sleep(1)
         
         print("\n" + "=" * 60)
         print("✅ Test suite completed!")

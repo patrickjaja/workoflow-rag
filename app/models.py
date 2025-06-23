@@ -11,6 +11,19 @@ class FileType(str, Enum):
     JSON = "json"
 
 
+class QueryType(str, Enum):
+    WHO = "who"
+    WHAT = "what"
+    WHERE = "where"
+    WHEN = "when"
+    WHY = "why"
+    HOW = "how"
+    FACTUAL = "factual"
+    DEFINITION = "definition"
+    COMPARISON = "comparison"
+    OTHER = "other"
+
+
 class SearchRequest(BaseModel):
     query: str = Field(..., description="Search query string")
     top_k: Optional[int] = Field(10, description="Number of results to return")
@@ -75,3 +88,30 @@ class DocumentChunk(BaseModel):
     embeddings: Optional[List[float]] = Field(None, description="Dense embeddings")
     sparse_indices: Optional[List[int]] = Field(None, description="Sparse vector indices")
     sparse_values: Optional[List[float]] = Field(None, description="Sparse vector values")
+
+
+class AskRequest(BaseModel):
+    query: str = Field(..., description="Natural language question")
+    top_k: Optional[int] = Field(10, description="Number of chunks to retrieve for context")
+    include_sources: Optional[bool] = Field(True, description="Include source documents in response")
+    max_tokens: Optional[int] = Field(500, description="Maximum tokens for answer generation")
+    temperature: Optional[float] = Field(0.3, description="LLM temperature for answer generation")
+
+
+class SourceDocument(BaseModel):
+    id: str = Field(..., description="Document chunk ID")
+    content: str = Field(..., description="Relevant excerpt from document")
+    metadata: Dict[str, Any] = Field(..., description="Document metadata")
+    relevance_score: float = Field(..., description="Relevance score to the query")
+
+
+class AskResponse(BaseModel):
+    query: str = Field(..., description="Original question")
+    answer: str = Field(..., description="Generated answer")
+    query_type: QueryType = Field(..., description="Detected type of question")
+    confidence_score: float = Field(..., description="Confidence in the answer (0-1)")
+    sources: Optional[List[SourceDocument]] = Field(None, description="Source documents used")
+    processing_time_ms: float = Field(..., description="Total processing time in milliseconds")
+    search_time_ms: float = Field(..., description="Search execution time in milliseconds")
+    generation_time_ms: float = Field(..., description="Answer generation time in milliseconds")
+    language: Optional[str] = Field(None, description="Detected language of the query")

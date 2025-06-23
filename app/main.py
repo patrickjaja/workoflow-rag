@@ -12,13 +12,15 @@ from typing import List
 from config import settings
 from models import (
     SearchRequest, SearchResponse, FileUploadResponse,
-    IndexingStatus, HealthCheck, CollectionStats
+    IndexingStatus, HealthCheck, CollectionStats,
+    AskRequest, AskResponse
 )
 from services.vector_store import VectorStore
 from services.minio_client import MinIOClient
-from services.embeddings import EmbeddingService
+from services.embeddings import EmbeddingService, LLMService
 from services.document_processor import DocumentProcessor
 from services.search_engine import HybridSearchEngine
+from services.answer_generator import AnswerGenerator
 
 
 # Configure logging
@@ -36,12 +38,14 @@ minio_client = None
 embedding_service = None
 document_processor = None
 search_engine = None
+llm_service = None
+answer_generator = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    global vector_store, minio_client, embedding_service, document_processor, search_engine
+    global vector_store, minio_client, embedding_service, document_processor, search_engine, llm_service, answer_generator
     
     logger.info("Initializing services...")
     
@@ -54,8 +58,10 @@ async def lifespan(app: FastAPI):
         await minio_client.initialize()
         
         embedding_service = EmbeddingService()
+        llm_service = LLMService()
         document_processor = DocumentProcessor(embedding_service)
         search_engine = HybridSearchEngine(vector_store, embedding_service)
+        answer_generator = AnswerGenerator(search_engine, llm_service)
         
         logger.info("All services initialized successfully")
         
@@ -189,6 +195,32 @@ async def search(request: SearchRequest):
         
     except Exception as e:
         logger.error(f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/ask", response_model=AskResponse, tags=["Q&A"])
+async def ask_question(request: AskRequest):
+    """
+    Ask a natural language question and get an AI-generated answer.
+    
+    This endpoint:
+    - Understands natural language questions
+    - Retrieves relevant information from indexed documents
+    - Generates a comprehensive answer using LLM
+    - Provides source attribution for transparency
+    
+    Example questions:
+    - "Who is Patrick Schönfeld?"
+    - "What is the role of John Smith in the company?"
+    - "Where is the Munich office located?"
+    """
+    try:
+        # Generate answer using the answer generator
+        response = await answer_generator.generate_answer(request)
+        return response
+        
+    except Exception as e:
+        logger.error(f"Question answering failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

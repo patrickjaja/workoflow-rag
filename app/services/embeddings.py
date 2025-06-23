@@ -222,3 +222,133 @@ class LLMService:
         except Exception as e:
             logger.error(f"Failed to rerank results: {e}")
             return results
+    
+    async def generate_answer(self, query: str, context_chunks: List[Dict], 
+                            max_tokens: int = 500, temperature: float = 0.3) -> Dict[str, any]:
+        """
+        Generate a natural language answer based on retrieved chunks.
+        
+        Returns:
+            Dict containing answer and confidence score
+        """
+        try:
+            # Prepare context from chunks
+            context = "Context information:\n\n"
+            for i, chunk in enumerate(context_chunks[:5]):  # Use top 5 chunks
+                context += f"[{i+1}] {chunk['content']}\n\n"
+            
+            # Create the prompt
+            prompt = f"""Based on the context provided below, answer the following question. 
+            If the answer cannot be found in the context, say so clearly.
+            Be concise but comprehensive. Use only information from the context.
+            
+            Question: {query}
+            
+            {context}
+            
+            Answer:"""
+            
+            response = await self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant that answers questions based only on the provided context. Be accurate and cite information from the context when possible."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            
+            answer = response.choices[0].message.content.strip()
+            
+            # Calculate confidence based on various factors
+            confidence = self._calculate_answer_confidence(answer, context_chunks)
+            
+            return {
+                "answer": answer,
+                "confidence": confidence
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to generate answer: {e}")
+            return {
+                "answer": "I encountered an error while generating the answer. Please try again.",
+                "confidence": 0.0
+            }
+    
+    def _calculate_answer_confidence(self, answer: str, chunks: List[Dict]) -> float:
+        """
+        Calculate confidence score for the generated answer.
+        
+        Based on:
+        - Average relevance scores of chunks
+        - Whether answer indicates uncertainty
+        - Length and completeness of answer
+        """
+        confidence = 0.0
+        
+        # Factor 1: Average chunk relevance scores (40% weight)
+        if chunks:
+            avg_score = sum(chunk.get('score', 0) for chunk in chunks) / len(chunks)
+            confidence += 0.4 * min(avg_score * 2, 1.0)  # Normalize scores
+        
+        # Factor 2: Answer certainty (40% weight)
+        uncertainty_phrases = [
+            "cannot be found", "no information", "unclear", "not mentioned",
+            "don't have", "unable to determine", "not available"
+        ]
+        answer_lower = answer.lower()
+        
+        if any(phrase in answer_lower for phrase in uncertainty_phrases):
+            confidence += 0.1  # Low confidence if uncertain
+        else:
+            confidence += 0.4  # High confidence if certain
+        
+        # Factor 3: Answer length and quality (20% weight)
+        if len(answer) > 50:  # Reasonable answer length
+            confidence += 0.2
+        elif len(answer) > 20:
+            confidence += 0.1
+        
+        return round(confidence, 2)
+    
+    async def parse_query(self, query: str) -> Dict[str, str]:
+        """
+        Parse a natural language query to understand intent and extract key information.
+        """
+        try:
+            prompt = f"""Analyze the following query and extract:
+            1. The main entity or subject being asked about
+            2. The type of information requested
+            3. Any specific attributes mentioned
+            
+            Query: {query}
+            
+            Return in format:
+            Entity: <entity>
+            Information Type: <type>
+            Attributes: <attributes>"""
+            
+            response = await self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {"role": "system", "content": "You are a query parsing assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=100
+            )
+            
+            result = response.choices[0].message.content.strip()
+            
+            # Parse the response
+            parsed = {}
+            for line in result.split('\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    parsed[key.strip()] = value.strip()
+            
+            return parsed
+            
+        except Exception as e:
+            logger.error(f"Failed to parse query: {e}")
+            return {}

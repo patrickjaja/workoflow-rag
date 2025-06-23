@@ -1,0 +1,41 @@
+# FastAPI and server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Vector database
+qdrant-client
+
+# Document processing
+unstructured[pdf,csv]
+pypdf
+python-magic
+pandas
+pdfminer.six
+
+# Azure OpenAI
+openai
+tiktoken
+
+# Object storage
+minio
+
+# Search and ranking
+sentence-transformers
+rank-bm25
+
+# Configuration and utilities
+pydantic
+pydantic-settings
+python-dotenv
+httpx
+
+# Logging
+loguru
+
+# Async file operations
+aiofiles
+
+# Testing
+pytest
+pytest-asyncio

@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Test coverage
+htmlcov/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Temporary files
+/tmp/
+temp/
+*.tmp
+
+# Docker volumes (local testing)
+qdrant_storage/
+minio_data/
+
+# Uploaded files
+uploads/
+
+# ML/Data files
+*.pkl
+*.h5
+*.model
+*.pth
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Documentation build
+docs/_build/
+docs/_static/
+docs/_templates/
+.env

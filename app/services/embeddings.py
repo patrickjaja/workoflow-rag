@@ -178,7 +178,12 @@ class LLMService:
             # Prepare context
             context = f"Query: {query}\n\nResults:\n"
             for i, result in enumerate(results[:5]):  # Limit to top 5 for reranking
-                context += f"{i+1}. {result['content'][:200]}...\n"
+                # Show more content and include metadata if available
+                content_preview = result['content'][:500]
+                if 'metadata' in result and 'filename' in result['metadata']:
+                    context += f"{i+1}. [From: {result['metadata']['filename']}] {content_preview}...\n"
+                else:
+                    context += f"{i+1}. {content_preview}...\n"
             
             prompt = f"""Given the search query and results below, rank the results from most to least relevant.
             Return only the numbers in order of relevance.

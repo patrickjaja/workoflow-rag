@@ -180,7 +180,8 @@ async def search(request: SearchRequest):
             query=request.query,
             top_k=request.top_k,
             search_type=request.search_type,
-            filters=request.filters
+            filters=request.filters,
+            rerank=request.rerank
         )
         
         search_time_ms = (time.time() - start_time) * 1000
@@ -256,6 +257,11 @@ async def upload_file(
         # Upload to MinIO
         file_id = await minio_client.upload_file(temp_path, file.filename)
         
+        # Delete existing chunks for this filename before indexing new ones
+        deleted_count = await vector_store.delete_by_filename(file.filename)
+        if deleted_count > 0:
+            logger.info(f"Replaced {deleted_count} existing chunks for {file.filename}")
+        
         # Process document
         chunks = await document_processor.process_file(temp_path, file.filename)
         
@@ -267,6 +273,10 @@ async def upload_file(
         
         processing_time_ms = (time.time() - start_time) * 1000
         
+        message = "File indexed successfully"
+        if deleted_count > 0:
+            message = f"File indexed successfully (replaced {deleted_count} existing chunks)"
+        
         return FileUploadResponse(
             file_id=file_id,
             filename=file.filename,
@@ -275,7 +285,7 @@ async def upload_file(
             chunks_created=len(chunks),
             processing_time_ms=processing_time_ms,
             status="success",
-            message="File indexed successfully"
+            message=message
         )
         
     except Exception as e:
@@ -301,6 +311,11 @@ async def refresh_index(background_tasks: BackgroundTasks):
                 # Download file
                 temp_path = f"/tmp/uploads/{file_info['name']}"
                 await minio_client.download_file(file_info['name'], temp_path)
+                
+                # Delete existing chunks for this file before re-indexing
+                deleted_count = await vector_store.delete_by_filename(file_info['name'])
+                if deleted_count > 0:
+                    logger.info(f"Replacing {deleted_count} existing chunks for {file_info['name']}")
                 
                 # Process and index
                 chunks = await document_processor.process_file(temp_path, file_info['name'])

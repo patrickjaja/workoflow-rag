@@ -35,8 +35,8 @@ COPY app/ /app/
 # Create necessary directories
 RUN mkdir -p /tmp/uploads
 
-# Expose port
-EXPOSE 8000
+# Expose ports
+EXPOSE 8000 5678
 
 # Set Python path
 ENV PYTHONPATH=/app

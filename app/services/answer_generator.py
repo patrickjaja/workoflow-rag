@@ -43,7 +43,7 @@ class AnswerGenerator:
                 query=optimized_query,
                 top_k=request.top_k,
                 search_type="hybrid",
-                rerank=True  # Enable reranking for better results
+                rerank=request.rerank  # Use rerank parameter from request
             )
             search_time = (time.time() - search_start) * 1000
             
@@ -70,7 +70,13 @@ class AnswerGenerator:
             # Prepare source documents if requested
             sources = None
             if request.include_sources and search_results:
-                sources = self._prepare_sources(search_results[:5])  # Top 5 sources
+                # Sort by rerank_score if available, otherwise by original score
+                sorted_results = sorted(
+                    search_results[:5],
+                    key=lambda x: x.rerank_score if x.rerank_score is not None else x.score,
+                    reverse=True
+                )
+                sources = self._prepare_sources(sorted_results)
             
             # Calculate total processing time
             total_time = (time.time() - start_time) * 1000
@@ -117,7 +123,8 @@ class AnswerGenerator:
                 id=result.id,
                 content=excerpt,
                 metadata=result.metadata,
-                relevance_score=result.score
+                relevance_score=result.score,
+                rerank_score=result.rerank_score
             )
             sources.append(source)
         

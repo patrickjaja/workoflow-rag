@@ -29,12 +29,14 @@ class SearchRequest(BaseModel):
     top_k: Optional[int] = Field(10, description="Number of results to return")
     search_type: Optional[str] = Field("hybrid", description="Search type: 'hybrid', 'dense', or 'sparse'")
     filters: Optional[Dict[str, Any]] = Field(None, description="Optional metadata filters")
+    rerank: Optional[bool] = Field(True, description="Whether to apply reranking to results")
 
 
 class SearchResult(BaseModel):
     id: str = Field(..., description="Document chunk ID")
     content: str = Field(..., description="Text content of the chunk")
     score: float = Field(..., description="Relevance score")
+    rerank_score: Optional[float] = Field(None, description="Reranked relevance score")
     metadata: Dict[str, Any] = Field(..., description="Document metadata")
     highlights: Optional[List[str]] = Field(None, description="Highlighted matching phrases")
 
@@ -96,6 +98,7 @@ class AskRequest(BaseModel):
     include_sources: Optional[bool] = Field(True, description="Include source documents in response")
     max_tokens: Optional[int] = Field(500, description="Maximum tokens for answer generation")
     temperature: Optional[float] = Field(0.3, description="LLM temperature for answer generation")
+    rerank: Optional[bool] = Field(True, description="Whether to apply reranking to search results")
 
 
 class SourceDocument(BaseModel):
@@ -103,6 +106,7 @@ class SourceDocument(BaseModel):
     content: str = Field(..., description="Relevant excerpt from document")
     metadata: Dict[str, Any] = Field(..., description="Document metadata")
     relevance_score: float = Field(..., description="Relevance score to the query")
+    rerank_score: Optional[float] = Field(None, description="Reranked relevance score")
 
 
 class AskResponse(BaseModel):

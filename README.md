@@ -98,6 +98,16 @@ Content-Type: application/json
 }
 ```
 
+### Ask
+```bash
+POST /ask
+Content-Type: application/json
+
+{
+  "query": "your search query"
+}
+```
+
 ### Refresh Index
 ```bash
 POST /index/refresh

@@ -75,6 +75,7 @@ class HybridSearchEngine:
                     id=result['id'],
                     content=result['content'],
                     score=result['score'],
+                    rerank_score=result.get('rerank_score'),
                     metadata=result['metadata'],
                     highlights=highlights
                 ))
@@ -111,28 +112,55 @@ class HybridSearchEngine:
                              top_k: int) -> List[Dict[str, Any]]:
         """
         Rerank results using cross-encoder approach with LLM.
+        Enhanced to prioritize exact name matches.
         """
         try:
             # For efficiency, only rerank top candidates
             candidates = results[:min(settings.rerank_top_k, len(results))]
             
-            # Calculate relevance scores using cosine similarity as base
+            # Extract names from query for special handling
+            import re
+            name_pattern = r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b'
+            query_names = re.findall(name_pattern, query)
+            is_name_query = len(query_names) > 0
+            
+            # Calculate relevance scores
             for candidate in candidates:
-                # You could implement a more sophisticated reranking here
-                # For now, we'll use a combination of the original score
-                # and keyword matching
                 keyword_score = self._calculate_keyword_score(query, candidate['content'])
-                candidate['rerank_score'] = (
-                    0.7 * candidate['score'] + 
-                    0.3 * keyword_score
-                )
+                
+                # For name queries, give much higher weight to keyword matching
+                if is_name_query and keyword_score >= 0.95:
+                    # Boost exact name matches significantly
+                    candidate['rerank_score'] = (
+                        0.3 * candidate['score'] + 
+                        0.7 * keyword_score
+                    )
+                elif is_name_query:
+                    # Still favor keyword matching for name queries
+                    candidate['rerank_score'] = (
+                        0.5 * candidate['score'] + 
+                        0.5 * keyword_score
+                    )
+                else:
+                    # Default weighting for non-name queries
+                    candidate['rerank_score'] = (
+                        0.7 * candidate['score'] + 
+                        0.3 * keyword_score
+                    )
             
             # Sort by rerank score
             candidates.sort(key=lambda x: x['rerank_score'], reverse=True)
             
             # If we have LLM reranking enabled and few enough candidates
             if len(candidates) <= 5:
-                candidates = await self.llm_service.rerank_results(query, candidates)
+                # Pass information about whether this is a name query
+                original_method = self.llm_service.rerank_results
+                if is_name_query:
+                    # Temporarily modify the query to emphasize name matching
+                    enhanced_query = f"Find information specifically about {', '.join(query_names)}. Query: {query}"
+                    candidates = await self.llm_service.rerank_results(enhanced_query, candidates)
+                else:
+                    candidates = await self.llm_service.rerank_results(query, candidates)
             
             # Take top k
             return candidates[:top_k]
@@ -143,21 +171,69 @@ class HybridSearchEngine:
             return results[:top_k]
     
     def _calculate_keyword_score(self, query: str, content: str) -> float:
-        """Calculate keyword-based relevance score."""
-        query_words = set(query.lower().split())
-        content_words = set(content.lower().split())
+        """Calculate keyword-based relevance score with enhanced name matching."""
+        query_lower = query.lower()
+        content_lower = content.lower()
         
-        if not query_words:
+        # Extract potential names from the query (capitalized words)
+        import re
+        # Pattern to find names (consecutive capitalized words)
+        name_pattern = r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b'
+        query_names = re.findall(name_pattern, query)
+        
+        # Check for exact name matches first (highest priority)
+        for name in query_names:
+            name_lower = name.lower()
+            # Check for exact name match
+            if name_lower in content_lower:
+                # Verify it's a word boundary match (not part of another word)
+                if re.search(r'\b' + re.escape(name_lower) + r'\b', content_lower):
+                    return 1.0
+            
+            # Check for name with middle name or initial variations
+            name_parts = name_lower.split()
+            if len(name_parts) >= 2:
+                # Try first and last name only
+                first_last = f"{name_parts[0]} {name_parts[-1]}"
+                if re.search(r'\b' + re.escape(first_last) + r'\b', content_lower):
+                    return 0.95
+        
+        # Check for exact phrase match of the entire query
+        if query_lower in content_lower:
+            return 0.9
+        
+        # For queries containing names, check if all name parts appear
+        if query_names:
+            all_name_parts_found = True
+            for name in query_names:
+                name_parts = name.lower().split()
+                for part in name_parts:
+                    if not re.search(r'\b' + re.escape(part) + r'\b', content_lower):
+                        all_name_parts_found = False
+                        break
+                if not all_name_parts_found:
+                    break
+            
+            if all_name_parts_found:
+                return 0.85
+        
+        # Fall back to word-based matching
+        query_words = query_lower.split()
+        query_words_set = set(word for word in query_words if len(word) > 2)  # Filter out small words
+        content_words_set = set(content_lower.split())
+        
+        if not query_words_set:
             return 0.0
         
         # Calculate Jaccard similarity
-        intersection = query_words.intersection(content_words)
-        union = query_words.union(content_words)
+        intersection = query_words_set.intersection(content_words_set)
         
-        if not union:
-            return 0.0
+        # Give higher weight to queries where all important words are found
+        if len(intersection) == len(query_words_set):
+            return 0.7
         
-        return len(intersection) / len(union)
+        # Partial match score
+        return len(intersection) / len(query_words_set) * 0.4
     
     def _extract_highlights(self, query: str, content: str, 
                            context_words: int = 10) -> List[str]:

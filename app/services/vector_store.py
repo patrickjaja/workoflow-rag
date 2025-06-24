@@ -359,6 +359,47 @@ class VectorStore:
             logger.error(f"Failed to get collection stats: {e}")
             raise
     
+    async def delete_by_filename(self, filename: str) -> int:
+        """Delete all documents matching a specific filename."""
+        try:
+            # Build filter for filename
+            filter_condition = Filter(
+                must=[
+                    FieldCondition(
+                        key="metadata.source",
+                        match=MatchValue(value=filename)
+                    )
+                ]
+            )
+            
+            # Get points matching the filename
+            scroll_result = await self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=filter_condition,
+                limit=1000,
+                with_payload=False,
+                with_vectors=False
+            )
+            
+            points_to_delete = [point.id for point in scroll_result[0]]
+            deleted_count = len(points_to_delete)
+            
+            if points_to_delete:
+                # Delete the points
+                await self.client.delete(
+                    collection_name=self.collection_name,
+                    points_selector=points_to_delete
+                )
+                logger.info(f"Deleted {deleted_count} chunks for file: {filename}")
+            else:
+                logger.info(f"No existing chunks found for file: {filename}")
+            
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"Failed to delete documents by filename: {e}")
+            raise
+    
     async def delete_collection(self):
         """Delete the collection (use with caution)."""
         try:

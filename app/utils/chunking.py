@@ -170,36 +170,26 @@ class StructuredDataChunker(ChunkingStrategy):
     def chunk_csv_rows(self, rows: List[Dict[str, Any]], source: str, 
                       metadata: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
-        Chunk CSV data by grouping rows.
+        Chunk CSV data - one chunk per row.
         """
         chunks = []
-        chunk_index = 0
         
-        # Group rows into chunks
-        for i in range(0, len(rows), self.chunk_size // 100):  # Approximate rows per chunk
-            chunk_rows = rows[i:i + self.chunk_size // 100]
-            
-            # Convert rows to readable format
-            content_lines = []
-            for row in chunk_rows:
-                row_str = ", ".join([f"{k}: {v}" for k, v in row.items()])
-                content_lines.append(row_str)
-            
-            content = "\n".join(content_lines)
+        # Create one chunk per row
+        for i, row in enumerate(rows):
+            # Convert row to readable format
+            row_str = ", ".join([f"{k}: {v}" for k, v in row.items()])
             
             chunk_metadata = self.add_metadata(
-                content, chunk_index, source, metadata
+                row_str, i, source, metadata
             )
             chunk_metadata["row_start"] = i
-            chunk_metadata["row_end"] = i + len(chunk_rows)
+            chunk_metadata["row_end"] = i  # Same as row_start since it's a single row
             chunk_metadata["data_type"] = "csv"
             
             chunks.append({
-                "content": content,
+                "content": row_str,
                 "metadata": chunk_metadata
             })
-            
-            chunk_index += 1
         
         logger.info(f"Created {len(chunks)} chunks from CSV with {len(rows)} rows")
         return chunks

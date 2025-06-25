@@ -39,6 +39,9 @@ docker-compose restart app
 # Full reset
 docker-compose down -v
 docker-compose up -d
+
+# Remote debugging
+docker-compose -f docker-compose.debug.yml up
 ```
 
 ### Local Development
@@ -51,7 +54,12 @@ cd app
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Run tests
-python test_api.py
+python test_api.py  # Tests all REST endpoints
+python test_mcp.py  # Tests MCP integration
+
+# Run data fetchers
+python integrations/fetch_service_map.py
+python integrations/fetch_decidalo_data.py
 ```
 
 ### Testing API Endpoints
@@ -59,13 +67,21 @@ python test_api.py
 # Health check
 curl http://localhost:8000/health
 
-# Upload file
+# Upload file (with deduplication)
 curl -X POST -F "file=@example_data/document.pdf" http://localhost:8000/upload
 
-# Search
+# Search (three modes: hybrid, dense, sparse)
 curl -X POST http://localhost:8000/search \
   -H "Content-Type: application/json" \
   -d '{"query": "test query", "top_k": 10, "search_type": "hybrid"}'
+
+# Ask question
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the company policy on X?"}'
+
+# Get statistics
+curl http://localhost:8000/stats
 
 # Refresh index from MinIO
 curl -X POST http://localhost:8000/index/refresh
@@ -87,6 +103,7 @@ curl -X POST http://localhost:8000/index/refresh
 - `HYBRID_ALPHA=0.7`: Controls dense vs sparse weight (higher = more semantic)
 - `CHUNK_SIZE=512`: Balance between context and precision
 - `CHUNK_OVERLAP=50`: Prevents information loss at chunk boundaries
+- `ENABLE_RERANKING=true`: Use LLM to rerank results for better relevance
 
 ## Key Implementation Details
 
@@ -94,6 +111,7 @@ curl -X POST http://localhost:8000/index/refresh
 - Uses Qdrant's named vectors: "dense" for embeddings, "sparse" for keywords
 - Implements Reciprocal Rank Fusion (RRF) for result combination
 - Fallback to dense search if hybrid fails
+- Enhanced name search with exact match prioritization
 
 ### Document Processing (app/services/document_processor.py)
 - PDF: Uses Unstructured with "hi_res" strategy
@@ -106,6 +124,18 @@ curl -X POST http://localhost:8000/index/refresh
 - Metadata preservation (source, chunk_index, file_type)
 - Smart chunking for structured data maintains context
 
+### Q&A Pipeline (app/services/answer_generator.py)
+- Query type detection (search vs. question vs. command)
+- Context building from search results
+- Confidence scoring and source attribution
+- Processing time breakdown in response
+
+### MCP Integration (app/services/mcp_server.py)
+- JSON-RPC 2.0 compliant server
+- Three tools: search_documents, ask_question, get_collection_stats
+- Optional authentication support
+- Designed for n8n workflow integration
+
 ## n8n Integration Notes
 
 The API is designed as a RAG tool for n8n workflows:
@@ -113,6 +143,7 @@ The API is designed as a RAG tool for n8n workflows:
 - Search endpoint accepts filters for metadata-based filtering
 - Upload endpoint handles multipart form data
 - Batch processing supported via index refresh
+- MCP endpoint for AI agent integration
 
 ## Environment Variables
 
@@ -121,3 +152,22 @@ Critical settings in `.env`:
 - MinIO credentials (default: minioadmin/minioadmin)
 - Qdrant connection settings
 - Search parameters (chunk size, overlap, alpha weight)
+- Rate limiting and batch processing settings
+- MCP authentication (optional)
+
+## Testing and Debugging
+
+### Integration Tests
+- `test_api.py`: Comprehensive REST API tests
+- `test_mcp.py`: MCP protocol validation
+- Example data in `example_data/` for testing
+
+### Remote Debugging
+- PyCharm/VS Code support via debugpy
+- Debug port: 5678
+- Use `docker-compose -f docker-compose.debug.yml up`
+
+### Data Integrations
+- Service Map fetcher: `integrations/fetch_service_map.py`
+- Decidalo employee data: `integrations/fetch_decidalo_data.py`
+- Cached responses in `integrations/.cache/`

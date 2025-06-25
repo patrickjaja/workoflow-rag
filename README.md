@@ -1,18 +1,20 @@
 # Hybrid Search RAG API
 
-A production-ready Retrieval-Augmented Generation (RAG) system with hybrid search capabilities, designed for on-premise deployment and n8n integration.
+A production-ready Retrieval-Augmented Generation (RAG) system with advanced hybrid search capabilities, combining semantic understanding with keyword precision for superior document retrieval. Designed for on-premise deployment and seamless n8n integration.
 
 ## Features
 
 - **Hybrid Search**: Combines semantic (dense) and keyword (sparse) search for optimal results
-- **Multi-Format Support**: Processes PDF, TXT, CSV, and JSON files
-- **Intelligent Chunking**: Document-type specific chunking strategies
-- **Azure OpenAI Integration**: Uses text-embedding-3-large for embeddings and gpt-4o-mini for reranking
-- **MinIO Storage**: S3-compatible object storage for document management
-- **Qdrant Vector Database**: High-performance vector search with hybrid capabilities
-- **RESTful API**: FastAPI-based endpoints for easy integration
-- **MCP Server**: Model Context Protocol support for n8n and AI agent integration
-- **Docker Deployment**: Fully containerized for easy on-premise deployment
+- **Advanced Ranking**: Multi-stage ranking with Reciprocal Rank Fusion and LLM-based reranking
+- **Multi-Format Support**: Processes PDF, TXT, CSV, and JSON files with format-specific strategies
+- **Intelligent Chunking**: Document-type specific chunking with configurable overlap
+- **Azure OpenAI Integration**: Uses text-embedding-3-large (3072 dimensions) and gpt-4o-mini
+- **MinIO Storage**: S3-compatible object storage with automatic deduplication
+- **Qdrant Vector Database**: High-performance vector search with named vectors
+- **RESTful API**: FastAPI-based endpoints with comprehensive error handling
+- **MCP Server**: Model Context Protocol support for AI agent integration
+- **Docker Deployment**: Fully containerized with health checks and monitoring
+- **Enhanced Name Search**: Special handling for person/entity name queries
 
 ## Architecture
 
@@ -29,6 +31,110 @@ A production-ready Retrieval-Augmented Generation (RAG) system with hybrid searc
 │  Processor  │     │   OpenAI    │
 └─────────────┘     └─────────────┘
 ```
+
+## Core Concepts
+
+### Hybrid Search Architecture
+
+This system implements a sophisticated hybrid search approach that combines the strengths of both semantic and keyword-based search:
+
+#### 1. **Dense Vectors (Semantic Search)**
+- Uses Azure OpenAI's `text-embedding-3-large` model (3072 dimensions)
+- Captures semantic meaning and context
+- Excellent for conceptual queries and paraphrasing
+- Handles synonyms and related concepts naturally
+
+#### 2. **Sparse Vectors (Keyword Search)**
+- Uses Qdrant's built-in sparse vector implementation
+- Preserves exact keyword matching capabilities
+- Critical for technical terms, names, and specific identifiers
+- Ensures important keywords aren't lost in semantic abstraction
+
+### Document Ranking & Reranking Process
+
+```
+┌─────────────────┐
+│   User Query    │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │ Process │
+    └────┬────┘
+         │
+    ┌────┴────┐              ┌────┴────┐
+    │  Dense  │              │ Sparse  │
+    │ Search  │              │ Search  │
+    │(Semantic)│             │(Keyword)│
+    └────┬────┘              └────┬────┘
+         │                        │
+         └──────────┬─────────────┘
+                     │
+              ┌──────┴──────┐
+              │     RRF     │
+              │   Fusion    │
+              └──────┬──────┘
+                     │
+              ┌──────┴──────┐
+              │  Optional   │
+              │ LLM Rerank  │
+              └──────┬──────┘
+                     │
+              ┌──────┴──────┐
+              │   Results   │
+              └─────────────┘
+```
+
+#### Stage 1: Initial Retrieval
+1. **Query Processing**: User query is simultaneously:
+   - Embedded into a dense vector for semantic search
+   - Tokenized into sparse vectors for keyword search
+
+2. **Parallel Search**: Both search methods run concurrently in Qdrant:
+   - Dense search finds semantically similar documents
+   - Sparse search finds keyword matches
+
+3. **Reciprocal Rank Fusion (RRF)**:
+   ```
+   RRF_score = Σ(1 / (k + rank_i))
+   ```
+   - Combines results from both searches
+   - `k=60` (constant) prevents bias toward top results
+   - Creates unified ranking preserving both semantic and keyword relevance
+
+#### Stage 2: LLM-Based Reranking (Optional)
+1. **Context Enrichment**: Top-K results are sent to GPT-4o-mini
+2. **Relevance Assessment**: LLM evaluates each result against the query
+3. **Smart Reordering**: Results are reranked based on:
+   - Contextual understanding
+   - Query intent matching
+   - Information completeness
+
+### Key Advantages
+
+#### 1. **Superior Retrieval Quality**
+- **Best of Both Worlds**: Captures both meaning and precision
+- **Robust to Query Variations**: Works with natural language and specific terms
+- **Context-Aware**: Understands document relationships and intent
+
+#### 2. **Enhanced Name Search**
+- Special handling for person/entity queries
+- Exact match prioritization for names
+- Prevents semantic drift for proper nouns
+
+#### 3. **Flexibility**
+- **Configurable Alpha Weight** (`HYBRID_ALPHA=0.7`): Tune semantic vs keyword importance
+- **Search Type Selection**: Choose hybrid, dense-only, or sparse-only per query
+- **Optional Reranking**: Balance speed vs accuracy based on use case
+
+#### 4. **Performance Optimization**
+- **Parallel Processing**: Dense and sparse searches run concurrently
+- **Batch Embeddings**: Efficient processing of multiple documents
+- **Fallback Strategies**: Graceful degradation if one method fails
+
+#### 5. **Document Intelligence**
+- **Format-Specific Processing**: Optimal handling for PDFs, CSVs, JSON, TXT
+- **Smart Chunking**: Preserves context with configurable overlap
+- **Metadata Preservation**: Maintains source, position, and type information
 
 ## Quick Start
 
@@ -177,17 +283,19 @@ This API is designed to work as a tool in n8n workflows for RAG patterns.
 
 ## Configuration
 
-Key settings in `.env`:
+Key settings in `.env` that control ranking behavior:
 
 ```bash
 # Chunking
 CHUNK_SIZE=512          # Characters per chunk
 CHUNK_OVERLAP=50        # Overlap between chunks
 
-# Search
-HYBRID_ALPHA=0.7        # Weight for dense vs sparse (0.7 = 70% dense)
-TOP_K_RESULTS=10        # Default number of results
-RERANK_TOP_K=20         # Candidates for reranking
+# Search & Ranking
+HYBRID_ALPHA=0.7        # Dense vs sparse weight (0.7 = 70% semantic, 30% keyword)
+TOP_K_RESULTS=10        # Final results to return
+RERANK_TOP_K=20         # Candidates for LLM reranking
+ENABLE_RERANKING=true   # Toggle LLM-based reranking
+RRF_K=60               # Reciprocal Rank Fusion constant
 
 # Azure OpenAI
 AZURE_EMBEDDING_DEPLOYMENT=text-embedding-3-large
@@ -222,10 +330,29 @@ curl -X POST http://localhost:8000/index/refresh
 
 ## Performance Optimization
 
-1. **Embedding Batch Size**: Adjust `EMBEDDING_BATCH_SIZE` for GPU/API limits
-2. **Chunk Size**: Larger chunks preserve more context but reduce precision
-3. **Hybrid Alpha**: Tune based on your data (higher = more semantic weight)
-4. **Reranking**: Disable for faster searches with `rerank=false`
+### Search Quality Tuning
+
+1. **Hybrid Alpha (`HYBRID_ALPHA`)**:
+   - `0.0`: Pure keyword search (best for exact matches)
+   - `0.5`: Balanced semantic and keyword
+   - `0.7`: Default - emphasizes semantic understanding
+   - `1.0`: Pure semantic search (best for concepts)
+
+2. **Chunk Configuration**:
+   - **Size**: Larger chunks (1024) preserve context, smaller (256) increase precision
+   - **Overlap**: Higher overlap (100) prevents boundary loss, lower (0) maximizes coverage
+
+3. **Reranking Strategy**:
+   - Enable for critical queries requiring highest accuracy
+   - Disable for real-time applications needing sub-second response
+   - Adjust `RERANK_TOP_K` to balance quality vs API costs
+
+### Performance Tips
+
+1. **Embedding Batch Size**: Adjust `EMBEDDING_BATCH_SIZE` for API rate limits
+2. **Concurrent Searches**: Hybrid search runs dense and sparse in parallel
+3. **Caching**: Results are cached for repeated queries
+4. **Index Optimization**: Regular index refresh maintains search quality
 
 ## Monitoring
 
@@ -264,9 +391,21 @@ docker-compose up -d
 - Enable request caching
 
 ### Search Quality Issues
-- Adjust `HYBRID_ALPHA` value
-- Increase `CHUNK_OVERLAP`
-- Enable reranking for better results
+
+1. **Poor Semantic Results**:
+   - Increase `HYBRID_ALPHA` toward 1.0
+   - Check embedding model deployment
+   - Verify chunk size isn't too small
+
+2. **Missing Exact Matches**:
+   - Decrease `HYBRID_ALPHA` toward 0.0
+   - Ensure sparse vectors are being generated
+   - Check tokenization isn't removing important terms
+
+3. **Irrelevant Results**:
+   - Enable reranking with `ENABLE_RERANKING=true`
+   - Increase `RERANK_TOP_K` for more candidates
+   - Adjust chunk overlap for better context
 
 ## n8n Integration
 
@@ -280,6 +419,29 @@ The API includes MCP (Model Context Protocol) support for seamless n8n integrati
    - `get_collection_stats`: Monitor your RAG system
 
 See `MCP_INTEGRATION.md` for detailed setup instructions.
+
+## Use Cases
+
+### Ideal For
+- **Technical Documentation**: Balances technical terms with conceptual search
+- **Knowledge Management**: Handles diverse query types from different users
+- **Customer Support**: Finds answers using both keywords and intent
+- **Research Libraries**: Combines citation search with topic exploration
+- **Enterprise Search**: Handles acronyms, names, and concepts equally well
+
+### Example Scenarios
+
+1. **Technical Query**: "SSL certificate error"
+   - Sparse search ensures "SSL" and "certificate" are found
+   - Dense search includes related concepts like "TLS" or "security"
+
+2. **Conceptual Query**: "How to improve team communication"
+   - Dense search dominates, finding semantically related content
+   - Sparse search still catches exact phrase matches
+
+3. **Name Search**: "John Smith project updates"
+   - Enhanced name detection prioritizes exact "John Smith" matches
+   - Semantic search finds related project content
 
 ## Development
 
@@ -303,6 +465,20 @@ python test_mcp.py
 1. Extend `DocumentProcessor` in `services/document_processor.py`
 2. Add parsing logic for the new type
 3. Update chunking strategy if needed
+
+## Enterprise Advantages
+
+### Why Hybrid Search RAG?
+
+1. **Accuracy**: Traditional semantic-only RAG systems can miss critical exact matches (product codes, names, technical terms). Our hybrid approach ensures nothing is lost.
+
+2. **Flexibility**: Single embedding models can't handle all query types equally well. By combining approaches, we excel at both natural language questions and specific keyword searches.
+
+3. **Performance**: Parallel processing and intelligent caching provide fast responses even with large document collections.
+
+4. **Control**: On-premise deployment with configurable ranking weights gives you full control over search behavior and data security.
+
+5. **Integration**: MCP protocol and REST API design make it easy to integrate with existing workflows, especially n8n automation.
 
 ## License
 

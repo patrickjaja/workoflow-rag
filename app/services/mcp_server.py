@@ -54,13 +54,15 @@ class MCPServer:
         answer_generator: AnswerGenerator,
         vector_store: VectorStore,
         minio_client: MinIOClient,
-        document_processor: DocumentProcessor
+        document_processor: DocumentProcessor,
+        settings
     ):
         self.search_engine = search_engine
         self.answer_generator = answer_generator
         self.vector_store = vector_store
         self.minio_client = minio_client
         self.document_processor = document_processor
+        self.settings = settings
         
         # Server metadata
         self.server_info = {

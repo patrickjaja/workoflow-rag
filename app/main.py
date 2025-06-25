@@ -71,7 +71,8 @@ async def lifespan(app: FastAPI):
             answer_generator=answer_generator,
             vector_store=vector_store,
             minio_client=minio_client,
-            document_processor=document_processor
+            document_processor=document_processor,
+            settings=settings
         )
         
         logger.info("All services initialized successfully")

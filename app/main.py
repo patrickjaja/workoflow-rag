@@ -13,7 +13,7 @@ from config import settings
 from models import (
     SearchRequest, SearchResponse, FileUploadResponse,
     IndexingStatus, HealthCheck, CollectionStats,
-    AskRequest, AskResponse, MCPRequest, MCPResponse
+    AskRequest, AskResponse
 )
 from services.vector_store import VectorStore
 from services.minio_client import MinIOClient
@@ -21,7 +21,6 @@ from services.embeddings import EmbeddingService, LLMService
 from services.document_processor import DocumentProcessor
 from services.search_engine import HybridSearchEngine
 from services.answer_generator import AnswerGenerator
-from services.mcp_server import MCPServer
 
 
 # Configure logging
@@ -41,13 +40,12 @@ document_processor = None
 search_engine = None
 llm_service = None
 answer_generator = None
-mcp_server = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    global vector_store, minio_client, embedding_service, document_processor, search_engine, llm_service, answer_generator, mcp_server
+    global vector_store, minio_client, embedding_service, document_processor, search_engine, llm_service, answer_generator
     
     logger.info("Initializing services...")
     
@@ -64,16 +62,6 @@ async def lifespan(app: FastAPI):
         document_processor = DocumentProcessor(embedding_service)
         search_engine = HybridSearchEngine(vector_store, embedding_service)
         answer_generator = AnswerGenerator(search_engine, llm_service)
-        
-        # Initialize MCP server
-        mcp_server = MCPServer(
-            search_engine=search_engine,
-            answer_generator=answer_generator,
-            vector_store=vector_store,
-            minio_client=minio_client,
-            document_processor=document_processor,
-            settings=settings
-        )
         
         logger.info("All services initialized successfully")
         
@@ -116,8 +104,7 @@ async def root():
             "upload": "/upload",
             "index": "/index/refresh",
             "health": "/health",
-            "stats": "/stats",
-            "mcp": "/mcp"
+            "stats": "/stats"
         }
     }
 
@@ -356,59 +343,6 @@ async def refresh_index(background_tasks: BackgroundTasks):
     except Exception as e:
         logger.error(f"Index refresh failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/mcp", tags=["MCP"])
-async def mcp_endpoint(request: Request):
-    """
-    Model Context Protocol (MCP) endpoint for AI agent integration.
-    
-    This endpoint implements the MCP JSON-RPC 2.0 protocol, allowing AI agents
-    (like n8n, Claude, etc.) to interact with the RAG system through a standardized interface.
-    
-    Available methods:
-    - initialize: Initialize MCP connection
-    - tools/list: List available tools
-    - tools/call: Execute a tool
-    - resources/list: List available resources
-    - resources/read: Read a specific resource
-    """
-    try:
-        # Check authentication if enabled
-        if settings.mcp_auth_enabled:
-            auth_header = request.headers.get("Authorization", "")
-            if not auth_header.startswith("Bearer "):
-                raise HTTPException(status_code=401, detail="Missing Bearer token")
-            
-            token = auth_header.replace("Bearer ", "")
-            if token != settings.mcp_auth_token:
-                raise HTTPException(status_code=401, detail="Invalid authentication token")
-        
-        # Get request body
-        request_data = await request.json()
-        
-        # Handle request through MCP server
-        response = await mcp_server.handle_request(request_data)
-        
-        # Return JSON-RPC response
-        return JSONResponse(content=response)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"MCP endpoint error: {e}")
-        # Return MCP-compliant error response
-        error_response = MCPResponse(
-            error={
-                "code": -32603,
-                "message": f"Internal error: {str(e)}"
-            },
-            id=request_data.get("id") if "request_data" in locals() else None
-        )
-        return JSONResponse(
-            content=error_response.model_dump(exclude_none=True),
-            status_code=200  # JSON-RPC errors still return 200 HTTP status
-        )
 
 
 if __name__ == "__main__":

@@ -119,27 +119,3 @@ class AskResponse(BaseModel):
     search_time_ms: float = Field(..., description="Search execution time in milliseconds")
     generation_time_ms: float = Field(..., description="Answer generation time in milliseconds")
     language: Optional[str] = Field(None, description="Detected language of the query")
-
-
-# MCP (Model Context Protocol) specific models
-class MCPRequest(BaseModel):
-    """MCP JSON-RPC 2.0 Request"""
-    jsonrpc: str = Field(default="2.0", description="JSON-RPC version")
-    method: str = Field(..., description="Method to invoke")
-    params: Optional[Dict[str, Any]] = Field(None, description="Method parameters")
-    id: Union[str, int, None] = Field(None, description="Request ID")
-
-
-class MCPResponse(BaseModel):
-    """MCP JSON-RPC 2.0 Response"""
-    jsonrpc: str = Field(default="2.0", description="JSON-RPC version")
-    result: Optional[Any] = Field(None, description="Result of successful execution")
-    error: Optional[Dict[str, Any]] = Field(None, description="Error information if failed")
-    id: Union[str, int, None] = Field(None, description="Request ID")
-
-
-class MCPNotification(BaseModel):
-    """MCP JSON-RPC 2.0 Notification (no ID, no response expected)"""
-    jsonrpc: str = Field(default="2.0", description="JSON-RPC version")
-    method: str = Field(..., description="Notification method")
-    params: Optional[Dict[str, Any]] = Field(None, description="Method parameters")

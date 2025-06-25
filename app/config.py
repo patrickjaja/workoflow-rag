@@ -51,13 +51,6 @@ class Settings(BaseSettings):
     # Rate limiting
     embeddings_per_minute: int = Field(default=300)  # Conservative limit for Azure OpenAI
     
-    # MCP Server settings
-    mcp_server_name: str = Field(default="rag-mcp-server")
-    mcp_server_version: str = Field(default="1.0.0")
-    mcp_server_vendor: str = Field(default="python-rag")
-    mcp_auth_enabled: bool = Field(default=False)
-    mcp_auth_token: Optional[str] = Field(default=None)
-    
     model_config = {
         "env_file": ".env",
         "case_sensitive": False

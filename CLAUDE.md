@@ -55,7 +55,6 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Run tests
 python test_api.py  # Tests all REST endpoints
-python test_mcp.py  # Tests MCP integration
 
 # Run data fetchers
 python integrations/fetch_service_map.py
@@ -130,12 +129,6 @@ curl -X POST http://localhost:8000/index/refresh
 - Confidence scoring and source attribution
 - Processing time breakdown in response
 
-### MCP Integration (app/services/mcp_server.py)
-- JSON-RPC 2.0 compliant server
-- Three tools: search_documents, ask_question, get_collection_stats
-- Optional authentication support
-- Designed for n8n workflow integration
-
 ## n8n Integration Notes
 
 The API is designed as a RAG tool for n8n workflows:
@@ -143,7 +136,6 @@ The API is designed as a RAG tool for n8n workflows:
 - Search endpoint accepts filters for metadata-based filtering
 - Upload endpoint handles multipart form data
 - Batch processing supported via index refresh
-- MCP endpoint for AI agent integration
 
 ## Environment Variables
 
@@ -153,13 +145,11 @@ Critical settings in `.env`:
 - Qdrant connection settings
 - Search parameters (chunk size, overlap, alpha weight)
 - Rate limiting and batch processing settings
-- MCP authentication (optional)
 
 ## Testing and Debugging
 
 ### Integration Tests
 - `test_api.py`: Comprehensive REST API tests
-- `test_mcp.py`: MCP protocol validation
 - Example data in `example_data/` for testing
 
 ### Remote Debugging

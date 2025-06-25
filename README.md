@@ -12,7 +12,6 @@ A production-ready Retrieval-Augmented Generation (RAG) system with advanced hyb
 - **MinIO Storage**: S3-compatible object storage with automatic deduplication
 - **Qdrant Vector Database**: High-performance vector search with named vectors
 - **RESTful API**: FastAPI-based endpoints with comprehensive error handling
-- **MCP Server**: Model Context Protocol support for AI agent integration
 - **Docker Deployment**: Fully containerized with health checks and monitoring
 - **Enhanced Name Search**: Special handling for person/entity name queries
 
@@ -205,13 +204,6 @@ Content-Type: application/json
 }
 ```
 
-### MCP (Model Context Protocol)
-```bash
-POST /mcp
-Content-Type: application/json
-
-# See MCP_INTEGRATION.md for detailed usage
-```
 
 ### Ask
 ```bash
@@ -409,16 +401,13 @@ docker-compose up -d
 
 ## n8n Integration
 
-The API includes MCP (Model Context Protocol) support for seamless n8n integration:
+The API provides REST endpoints that can be easily integrated with n8n workflows:
 
-1. Add MCP Client Tool node in n8n
-2. Configure endpoint: `http://your-host:8000/mcp`
-3. Use available tools:
-   - `search_documents`: Search your knowledge base
-   - `ask_question`: Get AI-powered answers
-   - `get_collection_stats`: Monitor your RAG system
-
-See `MCP_INTEGRATION.md` for detailed setup instructions.
+1. Use HTTP Request nodes to interact with the API
+2. Available endpoints:
+   - `/search`: Search your knowledge base
+   - `/ask`: Get AI-powered answers
+   - `/stats`: Monitor your RAG system
 
 ## Use Cases
 
@@ -455,11 +444,6 @@ cd app
 uvicorn main:app --reload
 ```
 
-### Testing MCP Integration
-```bash
-# Test MCP endpoint
-python test_mcp.py
-```
 
 ### Adding New File Types
 1. Extend `DocumentProcessor` in `services/document_processor.py`
@@ -478,7 +462,7 @@ python test_mcp.py
 
 4. **Control**: On-premise deployment with configurable ranking weights gives you full control over search behavior and data security.
 
-5. **Integration**: MCP protocol and REST API design make it easy to integrate with existing workflows, especially n8n automation.
+5. **Integration**: REST API design makes it easy to integrate with existing workflows, especially n8n automation.
 
 ## License
 

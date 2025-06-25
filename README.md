@@ -11,6 +11,7 @@ A production-ready Retrieval-Augmented Generation (RAG) system with hybrid searc
 - **MinIO Storage**: S3-compatible object storage for document management
 - **Qdrant Vector Database**: High-performance vector search with hybrid capabilities
 - **RESTful API**: FastAPI-based endpoints for easy integration
+- **MCP Server**: Model Context Protocol support for n8n and AI agent integration
 - **Docker Deployment**: Fully containerized for easy on-premise deployment
 
 ## Architecture
@@ -96,6 +97,14 @@ Content-Type: application/json
   "top_k": 10,
   "search_type": "hybrid"  # Options: "hybrid", "dense", "sparse"
 }
+```
+
+### MCP (Model Context Protocol)
+```bash
+POST /mcp
+Content-Type: application/json
+
+# See MCP_INTEGRATION.md for detailed usage
 ```
 
 ### Ask
@@ -259,6 +268,19 @@ docker-compose up -d
 - Increase `CHUNK_OVERLAP`
 - Enable reranking for better results
 
+## n8n Integration
+
+The API includes MCP (Model Context Protocol) support for seamless n8n integration:
+
+1. Add MCP Client Tool node in n8n
+2. Configure endpoint: `http://your-host:8000/mcp`
+3. Use available tools:
+   - `search_documents`: Search your knowledge base
+   - `ask_question`: Get AI-powered answers
+   - `get_collection_stats`: Monitor your RAG system
+
+See `MCP_INTEGRATION.md` for detailed setup instructions.
+
 ## Development
 
 ### Local Development
@@ -269,6 +291,12 @@ pip install -r requirements.txt
 # Run locally (requires services running)
 cd app
 uvicorn main:app --reload
+```
+
+### Testing MCP Integration
+```bash
+# Test MCP endpoint
+python test_mcp.py
 ```
 
 ### Adding New File Types

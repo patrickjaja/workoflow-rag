@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
 
@@ -96,7 +96,7 @@ class AskRequest(BaseModel):
     query: str = Field(..., description="Natural language question")
     top_k: Optional[int] = Field(10, description="Number of chunks to retrieve for context")
     include_sources: Optional[bool] = Field(True, description="Include source documents in response")
-    max_tokens: Optional[int] = Field(500, description="Maximum tokens for answer generation")
+    max_tokens: Optional[int] = Field(1000, description="Maximum tokens for answer generation")
     temperature: Optional[float] = Field(0.3, description="LLM temperature for answer generation")
     rerank: Optional[bool] = Field(True, description="Whether to apply reranking to search results")
 
@@ -119,3 +119,27 @@ class AskResponse(BaseModel):
     search_time_ms: float = Field(..., description="Search execution time in milliseconds")
     generation_time_ms: float = Field(..., description="Answer generation time in milliseconds")
     language: Optional[str] = Field(None, description="Detected language of the query")
+
+
+# MCP (Model Context Protocol) specific models
+class MCPRequest(BaseModel):
+    """MCP JSON-RPC 2.0 Request"""
+    jsonrpc: str = Field(default="2.0", description="JSON-RPC version")
+    method: str = Field(..., description="Method to invoke")
+    params: Optional[Dict[str, Any]] = Field(None, description="Method parameters")
+    id: Union[str, int, None] = Field(None, description="Request ID")
+
+
+class MCPResponse(BaseModel):
+    """MCP JSON-RPC 2.0 Response"""
+    jsonrpc: str = Field(default="2.0", description="JSON-RPC version")
+    result: Optional[Any] = Field(None, description="Result of successful execution")
+    error: Optional[Dict[str, Any]] = Field(None, description="Error information if failed")
+    id: Union[str, int, None] = Field(None, description="Request ID")
+
+
+class MCPNotification(BaseModel):
+    """MCP JSON-RPC 2.0 Notification (no ID, no response expected)"""
+    jsonrpc: str = Field(default="2.0", description="JSON-RPC version")
+    method: str = Field(..., description="Notification method")
+    params: Optional[Dict[str, Any]] = Field(None, description="Method parameters")

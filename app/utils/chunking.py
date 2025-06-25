@@ -102,13 +102,101 @@ class TextChunker(ChunkingStrategy):
 class StructuredDataChunker(ChunkingStrategy):
     """Chunking strategy for structured data (JSON, CSV)."""
     
+    def json_to_readable_text(self, obj: Any, indent: int = 0) -> str:
+        """
+        Convert JSON object to human-readable text format optimized for LLMs.
+        Works dynamically with any JSON structure.
+        """
+        indent_str = "  " * indent
+        
+        if isinstance(obj, dict):
+            lines = []
+            for key, value in obj.items():
+                # Format key nicely (replace underscores with spaces, capitalize)
+                formatted_key = key.replace('_', ' ').title()
+                
+                if isinstance(value, dict):
+                    lines.append(f"{indent_str}{formatted_key}:")
+                    lines.append(self.json_to_readable_text(value, indent + 1))
+                elif isinstance(value, list):
+                    if not value:  # Empty list
+                        lines.append(f"{indent_str}{formatted_key}: []")
+                    elif all(isinstance(item, (str, int, float, bool)) for item in value):
+                        # Simple list - show inline
+                        lines.append(f"{indent_str}{formatted_key}: {', '.join(str(v) for v in value)}")
+                    else:
+                        # Complex list - show each item on new line
+                        lines.append(f"{indent_str}{formatted_key}:")
+                        for i, item in enumerate(value):
+                            if isinstance(item, dict):
+                                lines.append(self.json_to_readable_text(item, indent + 1))
+                                if i < len(value) - 1:
+                                    lines.append("")  # Empty line between complex items
+                            else:
+                                lines.append(f"{indent_str}  - {item}")
+                elif value is None:
+                    continue  # Skip None values
+                elif value == "":
+                    continue  # Skip empty strings
+                else:
+                    lines.append(f"{indent_str}{formatted_key}: {value}")
+            
+            return "\n".join(lines)
+        
+        elif isinstance(obj, list):
+            lines = []
+            for i, item in enumerate(obj):
+                if isinstance(item, dict):
+                    lines.append(self.json_to_readable_text(item, indent))
+                    if i < len(obj) - 1:
+                        lines.append("")  # Empty line between items
+                else:
+                    lines.append(f"{indent_str}- {item}")
+            return "\n".join(lines)
+        
+        else:
+            return f"{indent_str}{obj}"
+    
     def chunk_json(self, data: Any, source: str, metadata: Dict[str, Any] = None,
                    path: str = "") -> List[Dict[str, Any]]:
         """
         Chunk JSON data by preserving structure and creating meaningful chunks.
+        For root-level arrays, each element becomes a single chunk.
         """
         chunks = []
         
+        # Special handling for root-level arrays (like employee data)
+        if path == "" and isinstance(data, list):
+            logger.info(f"Processing root-level JSON array with {len(data)} items")
+            
+            for i, item in enumerate(data):
+                # Convert JSON object to readable text
+                readable_content = self.json_to_readable_text(item)
+                
+                chunk_metadata = self.add_metadata(
+                    readable_content, i, source, metadata
+                )
+                chunk_metadata["json_path"] = f"[{i}]"
+                chunk_metadata["data_type"] = "json"
+                chunk_metadata["is_complete_record"] = True
+                
+                # If the item has an ID, add it to metadata
+                if isinstance(item, dict) and "id" in item:
+                    chunk_metadata["record_id"] = item["id"]
+                
+                # If the item has a name, add it to metadata for easier reference
+                if isinstance(item, dict) and "name" in item:
+                    chunk_metadata["record_name"] = item["name"]
+                
+                chunks.append({
+                    "content": readable_content,
+                    "metadata": chunk_metadata
+                })
+            
+            logger.info(f"Created {len(chunks)} chunks from JSON array (one per record)")
+            return chunks
+        
+        # Original behavior for non-array or nested JSON
         if isinstance(data, dict):
             # For dictionaries, create chunks for each key-value pair
             for key, value in data.items():
@@ -132,7 +220,7 @@ class StructuredDataChunker(ChunkingStrategy):
                     })
         
         elif isinstance(data, list):
-            # For lists, create chunks for each item
+            # For lists (non-root), create chunks for each item
             for i, item in enumerate(data):
                 current_path = f"{path}[{i}]"
                 

@@ -72,6 +72,12 @@ uploads/
 *.model
 *.pth
 
+# Integration scripts output
+integrations/.cache/
+integrations/decidalo_employees.json
+integrations/decidalo_employees_minimized.json
+integrations/service_map_data.json
+
 # Jupyter Notebooks
 .ipynb_checkpoints/
 *.ipynb
@@ -81,3 +87,4 @@ docs/_build/
 docs/_static/
 docs/_templates/
 .env
+integrations/.env

@@ -1,11 +1,12 @@
 from typing import List, Optional, Dict
 from loguru import logger
 import asyncio
-from openai import AsyncAzureOpenAI
+from openai import AsyncAzureOpenAI, RateLimitError
 import tiktoken
 import numpy as np
 
 from config import settings
+from utils.retry import async_retry, RateLimiter
 
 
 class EmbeddingService:
@@ -20,6 +21,7 @@ class EmbeddingService:
         self.deployment = settings.azure_embedding_deployment
         self.encoding = tiktoken.get_encoding("cl100k_base")
         self.max_tokens = 8191  # Max tokens for text-embedding-3-large
+        self.rate_limiter = RateLimiter(requests_per_minute=settings.embeddings_per_minute)
         
     async def health_check(self) -> bool:
         """Check if the embedding service is available."""
@@ -35,11 +37,21 @@ class EmbeddingService:
             logger.error(f"Embedding service health check failed: {e}")
             return False
     
+    @async_retry(
+        max_attempts=settings.max_retries,
+        initial_delay=settings.initial_retry_delay,
+        max_delay=settings.max_retry_delay,
+        exponential_base=settings.retry_multiplier,
+        exceptions=(RateLimitError,)
+    )
     async def embed_text(self, text: str) -> List[float]:
         """
         Generate embedding for a single text.
         """
         try:
+            # Apply rate limiting
+            await self.rate_limiter.acquire()
+            
             # Truncate text if too long
             truncated_text = self._truncate_text(text)
             
@@ -51,15 +63,28 @@ class EmbeddingService:
             embedding = response.data[0].embedding
             return embedding
             
+        except RateLimitError:
+            # Re-raise rate limit errors to trigger retry
+            raise
         except Exception as e:
             logger.error(f"Failed to generate embedding: {e}")
             raise
     
+    @async_retry(
+        max_attempts=settings.max_retries,
+        initial_delay=settings.initial_retry_delay,
+        max_delay=settings.max_retry_delay,
+        exponential_base=settings.retry_multiplier,
+        exceptions=(RateLimitError,)
+    )
     async def embed_batch(self, texts: List[str]) -> List[List[float]]:
         """
         Generate embeddings for a batch of texts.
         """
         try:
+            # Apply rate limiting
+            await self.rate_limiter.acquire()
+            
             # Truncate texts if necessary
             truncated_texts = [self._truncate_text(text) for text in texts]
             
@@ -72,17 +97,20 @@ class EmbeddingService:
             embeddings = [item.embedding for item in response.data]
             return embeddings
             
+        except RateLimitError:
+            # Re-raise rate limit errors to trigger retry
+            raise
         except Exception as e:
             logger.error(f"Failed to generate batch embeddings: {e}")
-            # Fallback to individual embeddings
+            # For non-rate-limit errors, fall back to individual embeddings
             embeddings = []
-            for text in texts:
+            for i, text in enumerate(texts):
                 try:
                     embedding = await self.embed_text(text)
                     embeddings.append(embedding)
-                except Exception as e:
-                    logger.error(f"Failed to embed text: {e}")
-                    # Return zero vector on failure
+                except Exception as individual_error:
+                    logger.error(f"Failed to embed text {i}: {individual_error}")
+                    # Return zero vector only as absolute last resort
                     embeddings.append([0.0] * settings.embedding_dimension)
             
             return embeddings

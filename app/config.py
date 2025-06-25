@@ -39,8 +39,24 @@ class Settings(BaseSettings):
     rerank_top_k: int = Field(default=20)
     
     # Embedding settings
-    embedding_batch_size: int = Field(default=100)
+    embedding_batch_size: int = Field(default=30)  # Reduced to avoid rate limits
     embedding_dimension: int = Field(default=3072)  # text-embedding-3-large dimension
+    
+    # Retry settings
+    max_retries: int = Field(default=3)
+    initial_retry_delay: float = Field(default=1.0)
+    max_retry_delay: float = Field(default=60.0)
+    retry_multiplier: float = Field(default=2.0)
+    
+    # Rate limiting
+    embeddings_per_minute: int = Field(default=300)  # Conservative limit for Azure OpenAI
+    
+    # MCP Server settings
+    mcp_server_name: str = Field(default="rag-mcp-server")
+    mcp_server_version: str = Field(default="1.0.0")
+    mcp_server_vendor: str = Field(default="python-rag")
+    mcp_auth_enabled: bool = Field(default=False)
+    mcp_auth_token: Optional[str] = Field(default=None)
     
     model_config = {
         "env_file": ".env",

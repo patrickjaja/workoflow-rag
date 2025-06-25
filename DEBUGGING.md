@@ -26,7 +26,7 @@ docker-compose build app
 #### Option 1: Always wait for debugger (recommended for debugging)
 ```bash
 # Use the debug compose file
-docker-compose -f docker-compose.debug.yml up
+docker-compose -f docker-compose.debug.yml up -d
 ```
 The container will start and wait for the debugger to attach before starting the API.
 

@@ -4,6 +4,7 @@ from loguru import logger
 import json
 import pandas as pd
 from datetime import datetime
+import asyncio
 
 from unstructured.partition.auto import partition
 from unstructured.partition.pdf import partition_pdf
@@ -177,8 +178,14 @@ class DocumentProcessor:
         
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i:i + batch_size]
+            logger.info(f"Processing embedding batch {i//batch_size + 1}/{(len(texts) + batch_size - 1)//batch_size}")
+            
             batch_embeddings = await self.embedding_service.embed_batch(batch_texts)
             all_embeddings.extend(batch_embeddings)
+            
+            # Add a small delay between batches to avoid overwhelming the API
+            if i + batch_size < len(texts):
+                await asyncio.sleep(0.5)
         
         # Create DocumentChunk objects
         for i, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):

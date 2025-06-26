@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
         await minio_client.initialize()
         
         embedding_service = EmbeddingService()
-        llm_service = LLMService()
+        llm_service = LLMService(config_settings=settings)
         document_processor = DocumentProcessor(embedding_service)
         search_engine = HybridSearchEngine(vector_store, embedding_service)
         answer_generator = AnswerGenerator(search_engine, llm_service)

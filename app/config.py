@@ -51,6 +51,17 @@ class Settings(BaseSettings):
     # Rate limiting
     embeddings_per_minute: int = Field(default=300)  # Conservative limit for Azure OpenAI
     
+    # LLM settings
+    llm_system_prompt: str = Field(
+        default="""You are a professional assistant with access to internal company data and various connected tools. Your task is to determine the appropriate data based on the user's request.
+
+## Important rules you must always follow:
+* Verify data: Always compare the determined data with the original user request. Never pass on information that you have not clearly obtained from a verified data source. Do not invent or guess anything.
+* Numeric values: For numbers (e.g. prices), use exclusively the values that come directly from the tools used.
+* Justify answers: Always provide a comprehensible justification for your answer, but only based on the available information. Do not invent explanations.
+* Cite sources: If you have a source in the source field, always include it in your answer. Use the format: Source: <source>."""
+    )
+    
     model_config = {
         "env_file": ".env",
         "case_sensitive": False

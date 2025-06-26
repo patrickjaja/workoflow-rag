@@ -159,13 +159,15 @@ class EmbeddingService:
 class LLMService:
     """Service for LLM operations using Azure OpenAI."""
     
-    def __init__(self):
+    def __init__(self, config_settings=None):
+        # Use provided settings or fall back to global settings
+        self.settings = config_settings or settings
         self.client = AsyncAzureOpenAI(
-            api_key=settings.azure_openai_api_key,
-            api_version=settings.azure_openai_api_version,
-            azure_endpoint=settings.azure_openai_endpoint
+            api_key=self.settings.azure_openai_api_key,
+            api_version=self.settings.azure_openai_api_version,
+            azure_endpoint=self.settings.azure_openai_endpoint
         )
-        self.deployment = settings.azure_llm_deployment
+        self.deployment = self.settings.azure_llm_deployment
     
     async def generate_keywords(self, text: str) -> List[str]:
         """
@@ -284,7 +286,7 @@ class LLMService:
             response = await self.client.chat.completions.create(
                 model=self.deployment,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that answers questions based only on the provided context. Be accurate and cite information from the context when possible."},
+                    {"role": "system", "content": self.settings.llm_system_prompt},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=temperature,
